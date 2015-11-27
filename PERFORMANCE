@@ -1,0 +1,348 @@
+
+ DBCOPY VERSION: INSERT_MANY - AFTER UPDATE
+ ------------------------------------------
+
+  Note:
+
+Insert_many was updated by using server-side cursor and fetchmany method
+in order to obtain better memory management - script now uses about
+46.1 MB of memory. This also led to improve of the execution time from 47.1s to
+41.6s - the 5.5 seconds decrease. Results might vary depending on testing 
+environment, especially hardware quality, network and MySQL setup. There 
+might be different execution speeds regarding the size of bulk inserts on 
+different machines, but the value can be modified by adjusting the row 
+parameter. There might be also possibility to increase time efficiency by
+modifying MySQL buffer settings, but it cannot be done without restarting the 
+server, which can be hard to obtain safely within the script itself and could 
+be done manually when possible and necessary. The above modifications were 
+applied in order to comply with the following requirements:
+
+ * Fixing a bug which do not allow adjusting server variables at first run of
+ the script
+ * Making copy of table with size over 1GB possible
+ * No memory optimization - the size of a table should not reflect memory
+ usage of the script
+
+All functionalities inside the code where successfully implemented.
+
+  Test results:
+
+%time table.insert_many()
+Wall time: 41.6 s
+
+In [7]: %prun table.insert_many()
+          9310983 function calls in 44.943 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       53   30.757    0.580   30.757    0.580 {method 'query' of '_mysql.connection' objects}
+   886616    3.905    0.000    4.373    0.000 times.py:98(Date_or_None)
+       46    2.293    0.050   39.083    0.850 cursors.py:210(executemany)
+  1329924    1.657    0.000    1.657    0.000 {method 'string_literal' of '_mysql.connection' objects}
+  1773232    1.609    0.000    4.401    0.000 {method 'escape' of '_mysql.connection' objects}
+       46    1.340    0.029    5.713    0.124 {built-in method fetch_row}
+  1773232    1.301    0.000    5.703    0.000 connections.py:267(literal)
+  1329924    0.784    0.000    2.441    0.000 connections.py:202(string_literal)
+   886616    0.468    0.000    0.468    0.000 {method 'split' of 'str' objects}
+   443308    0.351    0.000    0.351    0.000 converters.py:69(Thing2Str)
+   443361    0.229    0.000    0.229    0.000 {isinstance}
+        3    0.079    0.026    0.079    0.026 {method 'commit' of '_mysql.connection' objects}
+   443308    0.071    0.000    0.071    0.000 {method 'append' of 'list' objects}
+        1    0.054    0.054   44.942   44.942 dbcopy.py:147(insert_many)
+       90    0.036    0.000    0.036    0.000 {method 'join' of 'str' objects}
+       53    0.002    0.000   30.762    0.580 cursors.py:315(_do_query)
+       53    0.001    0.000    0.001    0.000 cursors.py:107(_warning_check)
+       53    0.001    0.000    0.002    0.000 cursors.py:142(_do_get_result)
+       45    0.001    0.000    0.001    0.000 {method 'search' of '_sre.SRE_Pattern' objects}
+       52    0.001    0.000    0.001    0.000 {method 'store_result' of '_mysql.connection' objects}
+      213    0.000    0.000    0.000    0.000 cursors.py:159(_get_db)
+       46    0.000    0.000    5.713    0.124 cursors.py:437(fetchmany)
+       52    0.000    0.000    0.001    0.000 cursors.py:351(_get_result)
+       52    0.000    0.000   30.760    0.592 cursors.py:353(_query)
+       98    0.000    0.000    5.713    0.058 cursors.py:324(_fetch_row)
+       52    0.000    0.000    0.000    0.000 cursors.py:358(_post_get_result)
+        8    0.000    0.000    0.014    0.002 cursors.py:164(execute)
+       53    0.000    0.000    0.000    0.000 {method 'affected_rows' of '_mysql.connection' objects}
+       45    0.000    0.000    0.000    0.000 {method 'group' of '_sre.SRE_Match' objects}
+       46    0.000    0.000    0.000    0.000 cursors.py:103(_check_executed)
+       53    0.000    0.000    0.000    0.000 {method 'info' of '_mysql.connection' objects}
+       53    0.000    0.000    0.000    0.000 {method 'insert_id' of '_mysql.connection' objects}
+       45    0.000    0.000    0.000    0.000 {method 'start' of '_sre.SRE_Match' objects}
+        1    0.000    0.000   44.943   44.943 <string>:1(<module>)
+       46    0.000    0.000    0.000    0.000 {len}
+       53    0.000    0.000    0.000    0.000 {method 'warning_count' of '_mysql.connection' objects}
+       45    0.000    0.000    0.000    0.000 {method 'end' of '_sre.SRE_Match' objects}
+        1    0.000    0.000    0.000    0.000 {method 'use_result' of '_mysql.connection' objects}
+        1    0.000    0.000    0.000    0.000 cursors.py:425(_get_result)
+        1    0.000    0.000    0.002    0.002 cursors.py:322(_query)
+        1    0.000    0.000    0.000    0.000 {built-in method describe}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method field_flags}
+
+In [4]: %mprun -f table.insert_many table.insert_many()
+('',)
+Filename: dbcopy.py
+
+Line #    Mem usage    Increment   Line Contents
+================================================
+   147     38.8 MiB      0.0 MiB       def insert_many(self, limit=False, rows=10000):
+   148                                     """Read table data and insert them into destination database.
+   149                             
+   150                                     Use standard SQL 'SELECT' and 'INSERT INTO' commands as well as
+   151                                     executemany method. With server-side cursor it is possible to 
+   152                                     insert specified number of rows in bulk without worrying about 
+   153                                     table size and memory.
+   154                                     """
+   155     38.8 MiB      0.0 MiB           if limit:
+   156                                         self.sc.execute("SELECT * FROM titles LIMIT %s", (limit,))
+   157                                     else:
+   158     38.8 MiB      0.0 MiB               self.sc.execute("SELECT * FROM titles")
+   159                             
+   160                                     #Just in case the data would not be ignored because of the size
+   161     38.8 MiB      0.0 MiB           self.dc.execute("SET GLOBAL max_allowed_packet=1073741824")
+   162                                     #Prevention of automated commits may increase execution speed
+   163     38.8 MiB      0.0 MiB           self.dc.execute("SET autocommit = 0")
+   164                                     #No foreign key checks for individual rows can increase performance
+   165     38.8 MiB      0.0 MiB           self.dc.execute("SET foreign_key_checks = 0")
+   166                                     #Disable unique values constraint while doing insert
+   167     38.8 MiB      0.0 MiB           self.dc.execute("SET unique_checks = 0")
+   168     38.8 MiB      0.0 MiB           self.dest_conn.commit()
+   169                                     #It helps to start the while loop 
+   170     38.8 MiB      0.0 MiB           data = True
+   171                                     
+   172     38.8 MiB      0.0 MiB           try:
+   173     46.1 MiB      7.3 MiB               while data:
+   174                                             #fetchmany method can be used to save memory and copy data
+   175                                             #over @@max_allowed_packet limit
+   176     46.1 MiB      0.0 MiB                   data = self.sc.fetchmany(rows)
+   177                                             #executemany is optimized for effective copying multiple rows
+   178     46.1 MiB      0.0 MiB                   self.dc.executemany(
+   179                                                 """
+   180                                                 INSERT INTO titles 
+   181                                                 (emp_no, title, from_date, to_date) 
+   182                                                 VALUES (%s, %s, %s, %s)
+   183     46.1 MiB      0.0 MiB                       """, data)
+   184     41.5 MiB     -4.7 MiB               self.dest_conn.commit()
+   185                                     except MySQLdb.Error, e:
+   186                                         print e[0],e[1]
+   187                                         self.dest_conn.rollback()
+   188                                         self.exit(2)
+   189                             
+   190                                     #Re-adjusting server settings
+   191     41.5 MiB      0.0 MiB           self.dc.execute("SET autocommit = 1")
+   192     41.5 MiB      0.0 MiB           self.dc.execute("SET foreign_key_checks = 1")
+   193     41.5 MiB      0.0 MiB           self.dc.execute("SET unique_checks = 1")
+   194     41.5 MiB      0.0 MiB           self.dest_conn.commit()
+
+
+-------------------------------------------------------------------------------
+
+
+  DBCOPY VERSION: INSERT
+  ----------------------
+
+%time table.insert()
+Wall time: 11min 57s
+
+%prun table.insert()
+          17289041 function calls in 674.520 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+   443309  633.504    0.001  633.504    0.001 {method 'query' of '_mysql.connection' objects}
+   443309    6.647    0.000  673.515    0.002 cursors.py:164(execute)
+   443309    4.075    0.000    4.075    0.000 cursors.py:107(_warning_check)
+   886616    3.845    0.000    4.299    0.000 times.py:98(Date_or_None)
+   443309    3.466    0.000    8.073    0.000 cursors.py:142(_do_get_result)
+  1329924    3.038    0.000    3.038    0.000 {method 'string_literal' of '_mysql.connection' objects}
+  1773232    2.910    0.000    7.989    0.000 {method 'escape' of '_mysql.connection' objects}
+   443309    2.301    0.000  644.159    0.001 cursors.py:315(_do_query)
+   443309    2.188    0.000    2.188    0.000 {method 'store_result' of '_mysql.connection' objects}
+  1773232    2.083    0.000   10.072    0.000 connections.py:267(literal)
+  1329924    1.222    0.000    4.260    0.000 connections.py:202(string_literal)
+  1773236    1.141    0.000    1.141    0.000 cursors.py:159(_get_db)
+        1    1.140    1.140    5.439    5.439 {built-in method fetch_row}
+   443309    1.015    0.000    3.389    0.000 cursors.py:351(_get_result)
+        1    0.969    0.969  674.520  674.520 dbcopy.py:115(insert)
+   886617    0.914    0.000    0.914    0.000 {isinstance}
+   443309    0.890    0.000    6.527    0.000 cursors.py:358(_post_get_result)
+   443309    0.886    0.000  651.571    0.001 cursors.py:353(_query)
+   443308    0.819    0.000    0.819    0.000 converters.py:69(Thing2Str)
+   886616    0.454    0.000    0.454    0.000 {method 'split' of 'str' objects}
+   443309    0.280    0.000    0.280    0.000 {method 'insert_id' of '_mysql.connection' objects}
+   443309    0.244    0.000    0.244    0.000 {method 'affected_rows' of '_mysql.connection' objects}
+   443309    0.198    0.000    5.637    0.000 cursors.py:324(_fetch_row)
+   443309    0.131    0.000    0.131    0.000 {method 'warning_count' of '_mysql.connection' objects}
+   443309    0.125    0.000    0.125    0.000 {method 'info' of '_mysql.connection' objects}
+        1    0.036    0.036    0.036    0.036 {method 'commit' of '_mysql.connection' objects}
+        1    0.000    0.000  674.520  674.520 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 {built-in method describe}
+        1    0.000    0.000    0.000    0.000 cursors.py:380(fetchall)
+        1    0.000    0.000    0.000    0.000 {built-in method field_flags}
+        1    0.000    0.000    0.000    0.000 cursors.py:103(_check_executed)
+        1    0.000    0.000    0.000    0.000 {len}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+
+Database queries used are very expensive, it seems that iteration over
+the result set is responsible for long execution time. Alternatively, 
+it is possible to insert data in bulk through executemany method, which
+should decrease the number of iterations. However, this is not possible
+for many MySQL servers to receive big chunks of data at the time,
+and raising @@max_allowed_packet to the highest level might not be 
+possible. Apart from that, executemany is presented in insert_many version.
+
+  DBCOPY VERSION: INSERT_MANY
+  ---------------------------
+
+%time table.insert_many()
+Wall time: 47.1 s
+
+%prun table.insert_many()
+          9309541 function calls in 48.208 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        3   32.462   10.821   32.462   10.821 {method 'query' of '_mysql.connection' objects}
+   886616    3.851    0.000    4.292    0.000 times.py:98(Date_or_None)
+        1    2.292    2.292   40.887   40.887 cursors.py:210(executemany)
+  1329924    1.684    0.000    1.684    0.000 {method 'string_literal' of '_mysql.connection' objects}
+  1773232    1.624    0.000    4.439    0.000 {method 'escape' of '_mysql.connection' objects}
+  1773232    1.322    0.000    5.761    0.000 connections.py:267(literal)
+        1    1.259    1.259    1.259    1.259 {method 'commit' of '_mysql.connection' objects}
+        1    1.088    1.088    5.380    5.380 {built-in method fetch_row}
+  1329924    0.782    0.000    2.466    0.000 connections.py:202(string_literal)
+        3    0.565    0.188    0.565    0.188 {method 'store_result' of '_mysql.connection' objects}
+   886616    0.441    0.000    0.441    0.000 {method 'split' of 'str' objects}
+   443308    0.350    0.000    0.350    0.000 converters.py:69(Thing2Str)
+   443311    0.240    0.000    0.240    0.000 {isinstance}
+        3    0.085    0.028    5.465    1.822 cursors.py:358(_post_get_result)
+   443308    0.082    0.000    0.082    0.000 {method 'append' of 'list' objects}
+        2    0.053    0.026    0.053    0.026 {method 'join' of 'str' objects}
+        1    0.026    0.026   48.208   48.208 dbcopy.py:142(insert_many)
+        3    0.003    0.001   33.031   11.010 cursors.py:315(_do_query)
+        3    0.000    0.000    0.566    0.189 cursors.py:142(_do_get_result)
+        3    0.000    0.000    0.000    0.000 cursors.py:107(_warning_check)
+        2    0.000    0.000    6.037    3.018 cursors.py:164(execute)
+        3    0.000    0.000    0.565    0.188 cursors.py:351(_get_result)
+        3    0.000    0.000   38.496   12.832 cursors.py:353(_query)
+       12    0.000    0.000    0.000    0.000 cursors.py:159(_get_db)
+        1    0.000    0.000    0.000    0.000 {method 'search' of '_sre.SRE_Pattern' objects}
+        1    0.000    0.000   48.208   48.208 <string>:1(<module>)
+        3    0.000    0.000    0.000    0.000 {method 'affected_rows' of '_mysql.connection' objects}
+        3    0.000    0.000    5.380    1.793 cursors.py:324(_fetch_row)
+        1    0.000    0.000    0.000    0.000 cursors.py:380(fetchall)
+        1    0.000    0.000    0.000    0.000 {built-in method describe}
+        3    0.000    0.000    0.000    0.000 {method 'insert_id' of '_mysql.connection' objects}
+        1    0.000    0.000    0.000    0.000 {method 'group' of '_sre.SRE_Match' objects}
+        3    0.000    0.000    0.000    0.000 {method 'info' of '_mysql.connection' objects}
+        1    0.000    0.000    0.000    0.000 cursors.py:103(_check_executed)
+        3    0.000    0.000    0.000    0.000 {method 'warning_count' of '_mysql.connection' objects}
+        1    0.000    0.000    0.000    0.000 {len}
+        1    0.000    0.000    0.000    0.000 {method 'start' of '_sre.SRE_Match' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method field_flags}
+        1    0.000    0.000    0.000    0.000 {method 'end' of '_sre.SRE_Match' objects}
+
+There is a significant decrease in execution time and queries are not so
+heavily used this time, although they are still the most expensive part of
+the code. Other optimizations of the code would probably not bring any
+significant results, since queries are still responsible for nearly all
+execution time. This might be the reason to look up for different solution.
+Usually, database built-in features are much more faster then python code.
+It would be interesting to compare how they behave in this setup. The
+next method would utilize mysqldump feature of MySQL server.
+
+  DBCOPY VERSION: DUMP
+  --------------------
+
+%time table.dump()
+Wall time: 34.5 s
+
+%prun table.dump()
+          5 function calls in 40.530 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1   40.529   40.529   40.529   40.529 {nt.system}
+        1    0.000    0.000   40.530   40.530 dbcopy.py:169(dump)
+        1    0.000    0.000   40.530   40.530 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 {method 'format' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+
+%mprun -f table.dump table.dump()
+('',)
+Filename: dbcopy.py
+
+Line #    Mem usage    Increment   Line Contents
+================================================
+   169     43.4 MiB      0.0 MiB       def dump(self):
+   170                                     """Generate MySQL table dump and put it into another database.
+   171                             
+   172                                     Using plain passwords here is insecure, be sure you are safe.
+   173                                     """
+   174                                     instr = """
+   175                                             mysqldump -u {0} -p{1} {2} {3} | mysql -u {4} -p{5} -h {6} {7}
+   176     43.4 MiB      0.0 MiB                   """.format(
+   177     43.4 MiB      0.0 MiB                       self.src_user,
+   178     43.4 MiB      0.0 MiB                       self.src_passwd,
+   179     43.4 MiB      0.0 MiB                       self.src_db,
+   180     43.4 MiB      0.0 MiB                       self.tbl_name,
+   181     43.4 MiB      0.0 MiB                       self.dest_user,
+   182     43.4 MiB      0.0 MiB                       self.dest_passwd,
+   183     43.4 MiB      0.0 MiB                       self.dest_host,
+   184     43.4 MiB      0.0 MiB                       self.dest_db)
+   185                             
+   186     43.4 MiB      0.0 MiB           system(instr)
+
+%lprun -f table.dump table.dump()
+Timer unit: 4.26663e-07 s
+
+Total time: 34.2239 s
+File: dbcopy.py
+Function: dump at line 169
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   169                                               def dump(self):
+   170                                                   """Generate MySQL table dump and put it into another database.
+   171                                           
+   172                                                   Using plain passwords here is insecure, be sure you are safe.
+   173                                                   """
+   174                                                   instr = """
+   175                                                           mysqldump -u {0} -p{1} {2} {3} | mysql -u {4} -p{5} -h {6} {7}
+   176         1            9      9.0      0.0                  """.format(
+   177         1            6      6.0      0.0                      self.src_user,
+   178         1            3      3.0      0.0                      self.src_passwd,
+   179         1            3      3.0      0.0                      self.src_db,
+   180         1            3      3.0      0.0                      self.tbl_name,
+   181         1            2      2.0      0.0                      self.dest_user,
+   182         1            2      2.0      0.0                      self.dest_passwd,
+   183         1            3      3.0      0.0                      self.dest_host,
+   184         1           16     16.0      0.0                      self.dest_db)
+   185                                           
+   186         1     80212815 80212815.0    100.0          system(instr)
+
+
+
+The mysqldump functionality is significantly faster then any previous
+solutions and it does not leave so much room for further improvements.
+It has many advantages over insert_many method - no need to care about
+@@max_allowed_packet, broad set of options, it is easy to handle in 
+code, can be used with many different tables without changing a 
+line and the memory used by the script does not reflect to the table
+it operates on. 
+There are still drawbacks though, and the biggest inefficiency is that 
+dumps has to be generated underneath in the source server and then back
+into low-level, binary table data on the destination server. The ideal 
+solution would be to transport binary formats and leave the conversion process
+behind. This seems to be probably possible through using transportable 
+tablespaces, but that solution has major difficulties for scripting - there has 
+to be also file transfer connection established between the servers (
+servers themselves might appear in very different configurations, with linux 
+and windows machines, firewalls, routers etc.) and proper error handling is
+crucial. Anyway, the closer to disk I/O capabilities the script can get, 
+the less speed optimization techniques are needed to be implemented.

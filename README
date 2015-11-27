@@ -1,0 +1,81 @@
+
+    DBCOPY OVERVIEW
+    ---------------
+
+DBCOPY is a python script for copying MySQL table into location on another
+server. It is crafted specifically for table 'titles' of database 'employees'.
+
+    MANIFEST
+    --------
+
+- __init__.py
+- dbcopy.py
+- LICENSE.txt
+- PERFORMANCE.txt
+- README.txt
+- test_dbcopy.py 
+
+    DEPENDENCIES
+    ------------
+
+In order to run DBCOPY you need to install MySQLdb. Try:
+    >pip install MySQLdb-python
+on Unix or install binary from:
+    http://www.lfd.uci.edu/~gohlke/pythonlibs/
+
+    INSTALLATION
+    ------------
+
+To install DBCOPY please do the following:
+1. Download and extract files from:
+    https://launchpad.net/test-db/employees-db-1/1.0.6/+download/employees_db-full-1.0.6.tar.bz2
+2. Go into the extracted directory
+    >cd <path_to_dir>
+3. To load database into your MySQL server:
+    >mysql -u <username> -p<password> < employees.sql
+4. Make sure you have installed MySQLdb - if not, see section about dependencies
+5. Unpack DBCOPY source code
+6. Edit dbcopy.py to adjust settings
+7. Repeat steps 1-3 into your destination server and clear the 'titles'
+table by entering:
+    >TRUNCATE TABLE titles;
+into your MySQL command line or run in your terminal:
+    >cd <path_to_dbcopy>
+    >python
+    >>import dbcopy
+    >>table = dbcopy.CopyMysqlTbl() #Destination database must exist
+    >>table.dump_except()
+    >>table.create_struct()
+    >>table.exit()
+8. Run from the command line:
+    python dbcopy.py
+
+    USAGE
+    -----
+
+You can easily use DBCOPY in Python Shell (or IPython), by creating
+an instance object 'table'.
+
+>>import dbcopy
+>>table = dbcopy.CopyMysqlTbl() #do not forget to adjust settings!
+>>table.dump()
+or
+>>table.insert_many()
+
+    DOCUMENTATION
+    -------------
+
+This README file intends to be full documentation of DBCOPY. For more about
+performance please look at PERFORMANCE file. If this short README would be
+insufficient, please refer to the docstrings in the code itself.
+
+    LICENSE
+    -------
+
+DBCOPY uses Apache License, Version 2.0. Please look at LICENSE.txt.
+
+    AUTHOR
+    ------
+
+name: Dominik Zabron
+contact: dominikzab@gmail.com
